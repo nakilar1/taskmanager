@@ -148,6 +148,22 @@ function closeAllModals() {
     [projectModal, taskModal, commentsModal].forEach(closeModal);
 }
 
+// Stats Function
+function updateStats() {
+    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+    const done = tasks.filter(t => t.status === 'done').length;
+    
+    const statProjects = document.getElementById('stat-projects');
+    const statTasks = document.getElementById('stat-tasks');
+    const statInProgress = document.getElementById('stat-inprogress');
+    const statDone = document.getElementById('stat-done');
+    
+    if (statProjects) statProjects.textContent = projects.length;
+    if (statTasks) statTasks.textContent = tasks.length;
+    if (statInProgress) statInProgress.textContent = inProgress;
+    if (statDone) statDone.textContent = done;
+}
+
 // Project Functions
 async function loadProjects() {
     try {
@@ -155,6 +171,7 @@ async function loadProjects() {
         projects = data.projects || [];
         renderProjects();
         updateProjectSelects();
+        updateStats();
     } catch (error) {
         showToast('Ошибка загрузки проектов: ' + error.message, 'error');
     }
@@ -256,6 +273,7 @@ async function loadTasks() {
         const data = await apiRequest(url);
         tasks = data.tasks || [];
         renderTasks();
+        updateStats();
     } catch (error) {
         showToast('Ошибка загрузки задач: ' + error.message, 'error');
     }
