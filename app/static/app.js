@@ -22,9 +22,11 @@ const projectModal = document.getElementById('project-modal');
 const taskModal = document.getElementById('task-modal');
 const commentsModal = document.getElementById('comments-modal');
 
-// API Helpers
+// API Helpers with error handling
 async function apiRequest(endpoint, options = {}) {
     const url = `${API_URL}/api${endpoint}`;
+    const token = localStorage.getItem('token');
+    
     const config = {
         headers: {
             'Content-Type': 'application/json',
@@ -33,8 +35,8 @@ async function apiRequest(endpoint, options = {}) {
         ...options
     };
 
-    if (authToken) {
-        config.headers['Authorization'] = `Bearer ${authToken}`;
+    if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
     }
 
     try {
@@ -42,11 +44,23 @@ async function apiRequest(endpoint, options = {}) {
         const data = await response.json();
 
         if (!response.ok) {
+            // Handle 401 - clear token and redirect to login
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                authToken = null;
+                showAuthSection();
+                showToast('Сессия истекла. Войдите снова.', 'error');
+                throw new Error('Session expired');
+            }
             throw new Error(data.error || data.message || `HTTP ${response.status}`);
         }
 
         return data;
     } catch (error) {
+        if (error.message === 'Failed to fetch') {
+            showToast('Ошибка соединения с сервером', 'error');
+        }
         throw error;
     }
 }
@@ -71,6 +85,7 @@ async function login(username, password) {
             body: JSON.stringify({ username, password })
         });
 
+        // Save token
         authToken = data.access_token;
         currentUser = data.user;
         localStorage.setItem('token', authToken);
@@ -79,7 +94,9 @@ async function login(username, password) {
         showDashboard();
         showToast('Вход выполнен успешно!', 'success');
     } catch (error) {
-        showToast(error.message, 'error');
+        if (error.message !== 'Session expired') {
+            showToast(error.message, 'error');
+        }
     }
 }
 
@@ -112,17 +129,19 @@ function showAuthSection() {
     dashboardSection.classList.add('hidden');
 }
 
-function showDashboard() {
+async function showDashboard() {
     authSection.classList.add('hidden');
     dashboardSection.classList.remove('hidden');
     
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (user) {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+        const user = JSON.parse(userData);
         document.getElementById('current-user').textContent = user.username;
     }
 
-    loadProjects();
-    loadTasks();
+    // Load data
+    await loadProjects();
+    await loadTasks();
 }
 
 function showLoginForm() {
@@ -173,7 +192,9 @@ async function loadProjects() {
         updateProjectSelects();
         updateStats();
     } catch (error) {
-        showToast('Ошибка загрузки проектов: ' + error.message, 'error');
+        if (error.message !== 'Session expired') {
+            showToast('Ошибка загрузки проектов: ' + error.message, 'error');
+        }
     }
 }
 
@@ -228,10 +249,12 @@ async function saveProject(e) {
         }
 
         closeModal(projectModal);
-        loadProjects();
+        await loadProjects();
         document.getElementById('project-form').reset();
     } catch (error) {
-        showToast(error.message, 'error');
+        if (error.message !== 'Session expired') {
+            showToast(error.message, 'error');
+        }
     }
 }
 
@@ -253,10 +276,12 @@ async function deleteProject(id) {
     try {
         await apiRequest(`/projects/${id}`, { method: 'DELETE' });
         showToast('Проект удален', 'success');
-        loadProjects();
-        loadTasks();
+        await loadProjects();
+        await loadTasks();
     } catch (error) {
-        showToast(error.message, 'error');
+        if (error.message !== 'Session expired') {
+            showToast(error.message, 'error');
+        }
     }
 }
 
@@ -275,7 +300,9 @@ async function loadTasks() {
         renderTasks();
         updateStats();
     } catch (error) {
-        showToast('Ошибка загрузки задач: ' + error.message, 'error');
+        if (error.message !== 'Session expired') {
+            showToast('Ошибка загрузки задач: ' + error.message, 'error');
+        }
     }
 }
 
@@ -340,10 +367,12 @@ async function saveTask(e) {
         }
 
         closeModal(taskModal);
-        loadTasks();
+        await loadTasks();
         document.getElementById('task-form').reset();
     } catch (error) {
-        showToast(error.message, 'error');
+        if (error.message !== 'Session expired') {
+            showToast(error.message, 'error');
+        }
     }
 }
 
@@ -368,9 +397,11 @@ async function deleteTask(id) {
     try {
         await apiRequest(`/tasks/${id}`, { method: 'DELETE' });
         showToast('Задача удалена', 'success');
-        loadTasks();
+        await loadTasks();
     } catch (error) {
-        showToast(error.message, 'error');
+        if (error.message !== 'Session expired') {
+            showToast(error.message, 'error');
+        }
     }
 }
 
@@ -396,7 +427,9 @@ async function showComments(taskId) {
         
         openModal(commentsModal);
     } catch (error) {
-        showToast('Ошибка загрузки комментариев: ' + error.message, 'error');
+        if (error.message !== 'Session expired') {
+            showToast('Ошибка загрузки комментариев: ' + error.message, 'error');
+        }
     }
 }
 
@@ -413,10 +446,12 @@ async function saveComment(e) {
         });
 
         document.getElementById('comment-text').value = '';
-        showComments(taskId);
+        await showComments(taskId);
         showToast('Комментарий добавлен', 'success');
     } catch (error) {
-        showToast(error.message, 'error');
+        if (error.message !== 'Session expired') {
+            showToast(error.message, 'error');
+        }
     }
 }
 
@@ -426,6 +461,8 @@ function updateProjectSelects() {
     
     selects.forEach(selectId => {
         const select = document.getElementById(selectId);
+        if (!select) return;
+        
         const currentValue = select.value;
         
         let options = selectId === 'project-filter' 
@@ -437,7 +474,7 @@ function updateProjectSelects() {
         ).join('');
         
         select.innerHTML = options;
-        select.value = currentValue;
+        if (currentValue) select.value = currentValue;
     });
 }
 
@@ -488,7 +525,9 @@ function escapeHtml(text) {
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
     // Check auth status
-    if (authToken) {
+    const token = localStorage.getItem('token');
+    if (token) {
+        authToken = token;
         showDashboard();
     } else {
         showAuthSection();
