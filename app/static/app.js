@@ -1,130 +1,100 @@
-// API Configuration
+// Task Manager Frontend - Fixed Version
 const API_URL = window.location.origin;
 
 // State
-let currentUser = null;
-let authToken = localStorage.getItem('token');
 let projects = [];
 let tasks = [];
 
 // DOM Elements
 const authSection = document.getElementById('auth-section');
 const dashboardSection = document.getElementById('dashboard-section');
-const loginForm = document.getElementById('login-form');
-const registerForm = document.getElementById('register-form');
-const projectsList = document.getElementById('projects-list');
-const tasksList = document.getElementById('tasks-list');
-const commentsList = document.getElementById('comments-list');
 const toastContainer = document.getElementById('toast-container');
 
-// Modals
-const projectModal = document.getElementById('project-modal');
-const taskModal = document.getElementById('task-modal');
-const commentsModal = document.getElementById('comments-modal');
-
-// API Helpers with error handling
-async function apiRequest(endpoint, options = {}) {
-    const url = `${API_URL}/api${endpoint}`;
+// API Helper
+async function api(endpoint, options = {}) {
     const token = localStorage.getItem('token');
-    
     const config = {
         headers: {
             'Content-Type': 'application/json',
-            ...options.headers
+            ...(token && { 'Authorization': `Bearer ${token}` })
         },
         ...options
     };
 
-    if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`;
-    }
+    const res = await fetch(`${API_URL}/api${endpoint}`, config);
+    const data = await res.json();
 
-    try {
-        const response = await fetch(url, config);
-        const data = await response.json();
-
-        if (!response.ok) {
-            // Handle 401 - clear token and redirect to login
-            if (response.status === 401) {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                authToken = null;
-                showAuthSection();
-                showToast('Сессия истекла. Войдите снова.', 'error');
-                throw new Error('Session expired');
-            }
-            throw new Error(data.error || data.message || `HTTP ${response.status}`);
+    if (!res.ok) {
+        if (res.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            showAuth();
+            throw new Error('AUTH_REQUIRED');
         }
-
-        return data;
-    } catch (error) {
-        if (error.message === 'Failed to fetch') {
-            showToast('Ошибка соединения с сервером', 'error');
-        }
-        throw error;
+        throw new Error(data.error || 'Ошибка сервера');
     }
+    return data;
 }
 
-// Toast Notifications
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    toastContainer.appendChild(toast);
-
-    setTimeout(() => {
-        toast.remove();
-    }, 3000);
+// Toast
+function toast(msg, type = 'info') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    toastContainer.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
 }
 
 // Auth Functions
-async function login(username, password) {
+async function login() {
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+
     try {
-        const data = await apiRequest('/auth/login', {
+        const data = await api('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ username, password })
         });
 
-        // Save token
-        authToken = data.access_token;
-        currentUser = data.user;
-        localStorage.setItem('token', authToken);
-        localStorage.setItem('user', JSON.stringify(currentUser));
-
+        localStorage.setItem('token', data.access_token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
         showDashboard();
-        showToast('Вход выполнен успешно!', 'success');
-    } catch (error) {
-        if (error.message !== 'Session expired') {
-            showToast(error.message, 'error');
+        toast('Добро пожаловать!', 'success');
+    } catch (err) {
+        if (err.message !== 'AUTH_REQUIRED') {
+            toast(err.message, 'error');
         }
     }
 }
 
-async function register(username, email, password) {
+async function register() {
+    const username = document.getElementById('reg-username').value;
+    const email = document.getElementById('reg-email').value;
+    const password = document.getElementById('reg-password').value;
+
     try {
-        await apiRequest('/auth/register', {
+        await api('/auth/register', {
             method: 'POST',
             body: JSON.stringify({ username, email, password })
         });
-
-        showToast('Регистрация успешна! Войдите в систему.', 'success');
-        showLoginForm();
-    } catch (error) {
-        showToast(error.message, 'error');
+        
+        toast('Регистрация успешна! Войдите.', 'success');
+        showLogin();
+    } catch (err) {
+        toast(err.message, 'error');
     }
 }
 
 function logout() {
-    authToken = null;
-    currentUser = null;
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    showAuthSection();
-    showToast('Вы вышли из системы', 'info');
+    showAuth();
+    toast('Вы вышли из системы', 'info');
 }
 
 // UI Functions
-function showAuthSection() {
+function showAuth() {
     authSection.classList.remove('hidden');
     dashboardSection.classList.add('hidden');
 }
@@ -133,95 +103,79 @@ async function showDashboard() {
     authSection.classList.add('hidden');
     dashboardSection.classList.remove('hidden');
     
-    const userData = localStorage.getItem('user');
-    if (userData) {
-        const user = JSON.parse(userData);
-        document.getElementById('current-user').textContent = user.username;
-    }
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    document.getElementById('current-user').textContent = user.username || 'User';
 
-    // Load data
-    await loadProjects();
-    await loadTasks();
+    await Promise.all([loadProjects(), loadTasks()]);
 }
 
-function showLoginForm() {
-    loginForm.classList.remove('hidden');
-    registerForm.classList.add('hidden');
+function showLogin() {
+    document.getElementById('login-form').classList.remove('hidden');
+    document.getElementById('register-form').classList.add('hidden');
 }
 
-function showRegisterForm() {
-    loginForm.classList.add('hidden');
-    registerForm.classList.remove('hidden');
+function showRegister() {
+    document.getElementById('login-form').classList.add('hidden');
+    document.getElementById('register-form').classList.remove('hidden');
 }
 
 // Modal Functions
-function openModal(modal) {
-    modal.classList.remove('hidden');
+function openModal(id) {
+    document.getElementById(id).classList.remove('hidden');
 }
 
-function closeModal(modal) {
-    modal.classList.add('hidden');
+function closeModal(id) {
+    document.getElementById(id).classList.add('hidden');
 }
 
-function closeAllModals() {
-    [projectModal, taskModal, commentsModal].forEach(closeModal);
-}
-
-// Stats Function
+// Stats
 function updateStats() {
     const inProgress = tasks.filter(t => t.status === 'in_progress').length;
     const done = tasks.filter(t => t.status === 'done').length;
     
-    const statProjects = document.getElementById('stat-projects');
-    const statTasks = document.getElementById('stat-tasks');
-    const statInProgress = document.getElementById('stat-inprogress');
-    const statDone = document.getElementById('stat-done');
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
     
-    if (statProjects) statProjects.textContent = projects.length;
-    if (statTasks) statTasks.textContent = tasks.length;
-    if (statInProgress) statInProgress.textContent = inProgress;
-    if (statDone) statDone.textContent = done;
+    setVal('stat-projects', projects.length);
+    setVal('stat-tasks', tasks.length);
+    setVal('stat-inprogress', inProgress);
+    setVal('stat-done', done);
 }
 
-// Project Functions
+// Projects
 async function loadProjects() {
     try {
-        const data = await apiRequest('/projects');
+        const data = await api('/projects');
         projects = data.projects || [];
         renderProjects();
-        updateProjectSelects();
+        updateSelects();
         updateStats();
-    } catch (error) {
-        if (error.message !== 'Session expired') {
-            showToast('Ошибка загрузки проектов: ' + error.message, 'error');
-        }
+    } catch (err) {
+        if (err.message !== 'AUTH_REQUIRED') toast('Ошибка загрузки проектов', 'error');
     }
 }
 
 function renderProjects() {
-    if (projects.length === 0) {
-        projectsList.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">📁</div>
-                <p>У вас пока нет проектов</p>
-            </div>
-        `;
+    const list = document.getElementById('projects-list');
+    
+    if (!projects.length) {
+        list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📁</div><p>Нет проектов</p></div>';
         return;
     }
 
-    projectsList.innerHTML = projects.map(project => `
-        <div class="card" data-project-id="${project.id}">
+    list.innerHTML = projects.map(p => `
+        <div class="card">
             <div class="card-header">
-                <div class="card-title">${escapeHtml(project.name)}</div>
+                <div class="card-title">${esc(p.name)}</div>
                 <div class="card-actions">
-                    <button class="btn btn-small btn-secondary" onclick="editProject(${project.id})">✏️</button>
-                    <button class="btn btn-small btn-danger" onclick="deleteProject(${project.id})">🗑️</button>
+                    <button class="btn btn-small btn-secondary" onclick="editProject(${p.id})">✏️</button>
+                    <button class="btn btn-small btn-danger" onclick="deleteProject(${p.id})">🗑️</button>
                 </div>
             </div>
-            <div class="card-description">${escapeHtml(project.description || 'Нет описания')}</div>
-            <div class="card-meta">
-                <span>Создан: ${formatDate(project.created_at)}</span>
-            </div>
+            <div class="card-description">${esc(p.description || 'Нет описания')}</div>
+            <div class="card-meta">${fmtDate(p.created_at)}</div>
         </div>
     `).join('');
 }
@@ -231,61 +185,56 @@ async function saveProject(e) {
     
     const id = document.getElementById('project-id').value;
     const name = document.getElementById('project-name').value;
-    const description = document.getElementById('project-desc').value;
+    const desc = document.getElementById('project-desc').value;
 
     try {
         if (id) {
-            await apiRequest(`/projects/${id}`, {
+            await api(`/projects/${id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ name, description })
+                body: JSON.stringify({ name, description: desc })
             });
-            showToast('Проект обновлен', 'success');
+            toast('Проект обновлен', 'success');
         } else {
-            await apiRequest('/projects', {
+            await api('/projects', {
                 method: 'POST',
-                body: JSON.stringify({ name, description })
+                body: JSON.stringify({ name, description: desc })
             });
-            showToast('Проект создан', 'success');
+            toast('Проект создан', 'success');
         }
-
-        closeModal(projectModal);
-        await loadProjects();
-        document.getElementById('project-form').reset();
-    } catch (error) {
-        if (error.message !== 'Session expired') {
-            showToast(error.message, 'error');
-        }
+        
+        closeModal('project-modal');
+        loadProjects();
+        e.target.reset();
+    } catch (err) {
+        if (err.message !== 'AUTH_REQUIRED') toast(err.message, 'error');
     }
 }
 
 function editProject(id) {
-    const project = projects.find(p => p.id === id);
-    if (!project) return;
-
-    document.getElementById('project-id').value = project.id;
-    document.getElementById('project-name').value = project.name;
-    document.getElementById('project-desc').value = project.description || '';
-    document.getElementById('project-modal-title').textContent = 'Редактировать проект';
+    const p = projects.find(x => x.id === id);
+    if (!p) return;
     
-    openModal(projectModal);
+    document.getElementById('project-id').value = p.id;
+    document.getElementById('project-name').value = p.name;
+    document.getElementById('project-desc').value = p.description || '';
+    document.getElementById('project-modal-title').textContent = 'Редактировать проект';
+    openModal('project-modal');
 }
 
 async function deleteProject(id) {
-    if (!confirm('Удалить проект? Все задачи будут удалены.')) return;
-
+    if (!confirm('Удалить проект?')) return;
+    
     try {
-        await apiRequest(`/projects/${id}`, { method: 'DELETE' });
-        showToast('Проект удален', 'success');
-        await loadProjects();
-        await loadTasks();
-    } catch (error) {
-        if (error.message !== 'Session expired') {
-            showToast(error.message, 'error');
-        }
+        await api(`/projects/${id}`, { method: 'DELETE' });
+        toast('Проект удален', 'success');
+        loadProjects();
+        loadTasks();
+    } catch (err) {
+        if (err.message !== 'AUTH_REQUIRED') toast(err.message, 'error');
     }
 }
 
-// Task Functions
+// Tasks
 async function loadTasks() {
     try {
         const projectFilter = document.getElementById('project-filter').value;
@@ -295,44 +244,39 @@ async function loadTasks() {
         if (projectFilter) url += `project_id=${projectFilter}&`;
         if (statusFilter) url += `status=${statusFilter}`;
 
-        const data = await apiRequest(url);
+        const data = await api(url);
         tasks = data.tasks || [];
         renderTasks();
         updateStats();
-    } catch (error) {
-        if (error.message !== 'Session expired') {
-            showToast('Ошибка загрузки задач: ' + error.message, 'error');
-        }
+    } catch (err) {
+        if (err.message !== 'AUTH_REQUIRED') toast('Ошибка загрузки задач', 'error');
     }
 }
 
 function renderTasks() {
-    if (tasks.length === 0) {
-        tasksList.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">📋</div>
-                <p>Нет задач</p>
-            </div>
-        `;
+    const list = document.getElementById('tasks-list');
+    
+    if (!tasks.length) {
+        list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><p>Нет задач</p></div>';
         return;
     }
 
-    tasksList.innerHTML = tasks.map(task => `
-        <div class="card" data-task-id="${task.id}">
+    list.innerHTML = tasks.map(t => `
+        <div class="card">
             <div class="card-header">
-                <div class="card-title">${escapeHtml(task.title)}</div>
+                <div class="card-title">${esc(t.title)}</div>
                 <div>
-                    <span class="badge status-${task.status}">${getStatusLabel(task.status)}</span>
-                    <span class="badge priority-${task.priority}">${getPriorityLabel(task.priority)}</span>
+                    <span class="badge status-${t.status}">${statusLabel(t.status)}</span>
+                    <span class="badge priority-${t.priority}">${priorityLabel(t.priority)}</span>
                 </div>
             </div>
-            <div class="card-description">${escapeHtml(task.description || 'Нет описания')}</div>
+            <div class="card-description">${esc(t.description || 'Нет описания')}</div>
             <div class="card-meta">
-                <span>Проект: ${getProjectName(task.project_id)}</span>
+                <span>${getProjectName(t.project_id)}</span>
                 <div class="card-actions">
-                    <button class="btn btn-small btn-secondary" onclick="editTask(${task.id})">✏️</button>
-                    <button class="btn btn-small btn-secondary" onclick="showComments(${task.id})">💬</button>
-                    <button class="btn btn-small btn-danger" onclick="deleteTask(${task.id})">🗑️</button>
+                    <button class="btn btn-small btn-secondary" onclick="editTask(${t.id})">✏️</button>
+                    <button class="btn btn-small btn-secondary" onclick="showComments(${t.id})">💬</button>
+                    <button class="btn btn-small btn-danger" onclick="deleteTask(${t.id})">🗑️</button>
                 </div>
             </div>
         </div>
@@ -353,83 +297,69 @@ async function saveTask(e) {
 
     try {
         if (id) {
-            await apiRequest(`/tasks/${id}`, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            });
-            showToast('Задача обновлена', 'success');
+            await api(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+            toast('Задача обновлена', 'success');
         } else {
-            await apiRequest('/tasks', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            });
-            showToast('Задача создана', 'success');
+            await api('/tasks', { method: 'POST', body: JSON.stringify(data) });
+            toast('Задача создана', 'success');
         }
-
-        closeModal(taskModal);
-        await loadTasks();
-        document.getElementById('task-form').reset();
-    } catch (error) {
-        if (error.message !== 'Session expired') {
-            showToast(error.message, 'error');
-        }
+        
+        closeModal('task-modal');
+        loadTasks();
+        e.target.reset();
+    } catch (err) {
+        if (err.message !== 'AUTH_REQUIRED') toast(err.message, 'error');
     }
 }
 
 function editTask(id) {
-    const task = tasks.find(t => t.id === id);
-    if (!task) return;
-
-    document.getElementById('task-id').value = task.id;
-    document.getElementById('task-title').value = task.title;
-    document.getElementById('task-desc').value = task.description || '';
-    document.getElementById('task-project').value = task.project_id;
-    document.getElementById('task-status').value = task.status;
-    document.getElementById('task-priority').value = task.priority;
-    document.getElementById('task-modal-title').textContent = 'Редактировать задачу';
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
     
-    openModal(taskModal);
+    document.getElementById('task-id').value = t.id;
+    document.getElementById('task-title').value = t.title;
+    document.getElementById('task-desc').value = t.description || '';
+    document.getElementById('task-project').value = t.project_id;
+    document.getElementById('task-status').value = t.status;
+    document.getElementById('task-priority').value = t.priority;
+    document.getElementById('task-modal-title').textContent = 'Редактировать задачу';
+    openModal('task-modal');
 }
 
 async function deleteTask(id) {
     if (!confirm('Удалить задачу?')) return;
-
+    
     try {
-        await apiRequest(`/tasks/${id}`, { method: 'DELETE' });
-        showToast('Задача удалена', 'success');
-        await loadTasks();
-    } catch (error) {
-        if (error.message !== 'Session expired') {
-            showToast(error.message, 'error');
-        }
+        await api(`/tasks/${id}`, { method: 'DELETE' });
+        toast('Задача удалена', 'success');
+        loadTasks();
+    } catch (err) {
+        if (err.message !== 'AUTH_REQUIRED') toast(err.message, 'error');
     }
 }
 
-// Comments Functions
+// Comments
 async function showComments(taskId) {
     try {
-        const data = await apiRequest(`/comments?task_id=${taskId}`);
+        const data = await api(`/comments?task_id=${taskId}`);
         const comments = data.comments || [];
         
         document.getElementById('comment-task-id').value = taskId;
         
-        if (comments.length === 0) {
-            commentsList.innerHTML = '<div class="no-comments">Пока нет комментариев</div>';
-        } else {
-            commentsList.innerHTML = comments.map(comment => `
+        const list = document.getElementById('comments-list');
+        list.innerHTML = comments.length 
+            ? comments.map(c => `
                 <div class="comment">
-                    <div class="comment-author">${escapeHtml(comment.author?.username || 'Unknown')}</div>
-                    <div class="comment-text">${escapeHtml(comment.text)}</div>
-                    <div class="comment-time">${formatDate(comment.created_at)}</div>
+                    <div class="comment-author">${esc(c.author?.username || 'Unknown')}</div>
+                    <div class="comment-text">${esc(c.text)}</div>
+                    <div class="comment-time">${fmtDate(c.created_at)}</div>
                 </div>
-            `).join('');
-        }
+            `).join('')
+            : '<div class="no-comments">Нет комментариев</div>';
         
-        openModal(commentsModal);
-    } catch (error) {
-        if (error.message !== 'Session expired') {
-            showToast('Ошибка загрузки комментариев: ' + error.message, 'error');
-        }
+        openModal('comments-modal');
+    } catch (err) {
+        if (err.message !== 'AUTH_REQUIRED') toast('Ошибка загрузки комментариев', 'error');
     }
 }
 
@@ -440,82 +370,56 @@ async function saveComment(e) {
     const text = document.getElementById('comment-text').value;
 
     try {
-        await apiRequest('/comments', {
+        await api('/comments', {
             method: 'POST',
             body: JSON.stringify({ task_id: parseInt(taskId), text })
         });
-
+        
         document.getElementById('comment-text').value = '';
-        await showComments(taskId);
-        showToast('Комментарий добавлен', 'success');
-    } catch (error) {
-        if (error.message !== 'Session expired') {
-            showToast(error.message, 'error');
-        }
+        showComments(taskId);
+        toast('Комментарий добавлен', 'success');
+    } catch (err) {
+        if (err.message !== 'AUTH_REQUIRED') toast(err.message, 'error');
     }
 }
 
-// Helper Functions
-function updateProjectSelects() {
+// Helpers
+function updateSelects() {
     const selects = ['project-filter', 'task-project'];
-    
-    selects.forEach(selectId => {
-        const select = document.getElementById(selectId);
-        if (!select) return;
+    selects.forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
         
-        const currentValue = select.value;
+        const val = sel.value;
+        let opts = id === 'project-filter' ? '<option value="">Все проекты</option>' : '';
+        opts += projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
         
-        let options = selectId === 'project-filter' 
-            ? '<option value="">Все проекты</option>' 
-            : '';
-        
-        options += projects.map(p => 
-            `<option value="${p.id}">${escapeHtml(p.name)}</option>`
-        ).join('');
-        
-        select.innerHTML = options;
-        if (currentValue) select.value = currentValue;
+        sel.innerHTML = opts;
+        if (val) sel.value = val;
     });
 }
 
-function getProjectName(projectId) {
-    const project = projects.find(p => p.id === projectId);
-    return project ? project.name : 'Unknown';
+function getProjectName(id) {
+    const p = projects.find(x => x.id === id);
+    return p ? p.name : 'Unknown';
 }
 
-function getStatusLabel(status) {
-    const labels = {
-        'todo': 'К выполнению',
-        'in_progress': 'В работе',
-        'done': 'Выполнено',
-        'cancelled': 'Отменено'
-    };
-    return labels[status] || status;
+function statusLabel(s) {
+    const map = { 'todo': 'К выполнению', 'in_progress': 'В работе', 'done': 'Выполнено', 'cancelled': 'Отменено' };
+    return map[s] || s;
 }
 
-function getPriorityLabel(priority) {
-    const labels = {
-        'low': 'Низкий',
-        'medium': 'Средний',
-        'high': 'Высокий',
-        'urgent': 'Срочный'
-    };
-    return labels[priority] || priority;
+function priorityLabel(p) {
+    const map = { 'low': 'Низкий', 'medium': 'Средний', 'high': 'Высокий', 'urgent': 'Срочный' };
+    return map[p] || p;
 }
 
-function formatDate(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ru-RU', { 
-        day: 'numeric', 
-        month: 'short', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+function fmtDate(d) {
+    if (!d) return '';
+    return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-function escapeHtml(text) {
+function esc(text) {
     if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
@@ -524,86 +428,75 @@ function escapeHtml(text) {
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
-    // Check auth status
-    const token = localStorage.getItem('token');
-    if (token) {
-        authToken = token;
+    // Check auth
+    if (localStorage.getItem('token')) {
         showDashboard();
     } else {
-        showAuthSection();
+        showAuth();
     }
 
     // Auth forms
     document.getElementById('login').addEventListener('submit', (e) => {
         e.preventDefault();
-        const username = document.getElementById('login-username').value;
-        const password = document.getElementById('login-password').value;
-        login(username, password);
+        login();
     });
 
     document.getElementById('register').addEventListener('submit', (e) => {
         e.preventDefault();
-        const username = document.getElementById('reg-username').value;
-        const email = document.getElementById('reg-email').value;
-        const password = document.getElementById('reg-password').value;
-        register(username, email, password);
+        register();
     });
 
     document.getElementById('show-register').addEventListener('click', (e) => {
         e.preventDefault();
-        showRegisterForm();
+        showRegister();
     });
 
     document.getElementById('show-login').addEventListener('click', (e) => {
         e.preventDefault();
-        showLoginForm();
+        showLogin();
     });
 
     document.getElementById('logout-btn').addEventListener('click', logout);
 
-    // Project modal
+    // Modals
     document.getElementById('new-project-btn').addEventListener('click', () => {
         document.getElementById('project-form').reset();
         document.getElementById('project-id').value = '';
         document.getElementById('project-modal-title').textContent = 'Новый проект';
-        openModal(projectModal);
+        openModal('project-modal');
     });
 
-    document.getElementById('project-form').addEventListener('submit', saveProject);
-
-    // Task modal
     document.getElementById('new-task-btn').addEventListener('click', () => {
         document.getElementById('task-form').reset();
         document.getElementById('task-id').value = '';
         document.getElementById('task-modal-title').textContent = 'Новая задача';
-        openModal(taskModal);
+        openModal('task-modal');
     });
 
+    document.getElementById('project-form').addEventListener('submit', saveProject);
     document.getElementById('task-form').addEventListener('submit', saveTask);
-
-    // Comment form
     document.getElementById('comment-form').addEventListener('submit', saveComment);
 
     // Filters
     document.getElementById('project-filter').addEventListener('change', loadTasks);
     document.getElementById('status-filter').addEventListener('change', loadTasks);
 
-    // Modal close buttons
+    // Close modals
     document.querySelectorAll('.close, .cancel-modal').forEach(btn => {
-        btn.addEventListener('click', () => {
-            closeAllModals();
+        btn.addEventListener('click', (e) => {
+            const modal = e.target.closest('.modal');
+            if (modal) modal.classList.add('hidden');
         });
     });
 
-    // Close modal on outside click
     window.addEventListener('click', (e) => {
         if (e.target.classList.contains('modal')) {
-            closeAllModals();
+            e.target.classList.add('hidden');
         }
     });
 });
 
-// Make functions available globally for onclick handlers
+// Global functions for onclick
 window.editProject = editProject;
 window.deleteProject = deleteProject;
 window.editTask = editTask;
