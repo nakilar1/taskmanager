@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Auth Section -->
+        <div id="auth-section" class="section">
+            <div class="auth-container">
+                <h1>Task Manager</h1>
+                
+                <!-- Login Form -->
+                <div id="login-form" class="form-container">
+                    <h2>Вход</h2>
+                    <form id="login">
+                        <div class="form-group">
+                            <label for="login-username">Имя пользователя</label>
+                            <input type="text" id="login-username" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="login-password">Пароль</label>
+                            <input type="password" id="login-password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Войти</button>
+                        <p class="form-switch">Нет аккаунта? <a href="#" id="show-register">Зарегистрироваться</a></p>
+                    </form>
+                </div>
+
+                <!-- Register Form -->
+                <div id="register-form" class="form-container hidden">
+                    <h2>Регистрация</h2>
+                    <form id="register">
+                        <div class="form-group">
+                            <label for="reg-username">Имя пользователя</label>
+                            <input type="text" id="reg-username" required minlength="3">
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-email">Email</label>
+                            <input type="email" id="reg-email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-password">Пароль</label>
+                            <input type="password" id="reg-password" required minlength="6">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Зарегистрироваться</button>
+                        <p class="form-switch">Уже есть аккаунт? <a href="#" id="show-login">Войти</a></p>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-section" class="section hidden">
+            <header class="header">
+                <h1>Task Manager</h1>
+                <div class="user-info">
+                    <span id="current-user">Пользователь</span>
+                    <button id="logout-btn" class="btn btn-secondary">Выйти</button>
+                </div>
+            </header>
+
+            <main class="main-content">
+                <!-- Projects -->
+                <section class="projects-section">
+                    <div class="section-header">
+                        <h2>Проекты</h2>
+                        <button id="new-project-btn" class="btn btn-primary">+ Новый проект</button>
+                    </div>
+                    <div id="projects-list" class="cards-list">
+                        <!-- Projects will be loaded here -->
+                    </div>
+                </section>
+
+                <!-- Tasks -->
+                <section class="tasks-section">
+                    <div class="section-header">
+                        <h2>Задачи</h2>
+                        <div class="filters">
+                            <select id="project-filter">
+                                <option value="">Все проекты</option>
+                            </select>
+                            <select id="status-filter">
+                                <option value="">Все статусы</option>
+                                <option value="todo">К выполнению</option>
+                                <option value="in_progress">В работе</option>
+                                <option value="done">Выполнено</option>
+                                <option value="cancelled">Отменено</option>
+                            </select>
+                            <button id="new-task-btn" class="btn btn-primary">+ Новая задача</button>
+                        </div>
+                    </div>
+                    <div id="tasks-list" class="cards-list">
+                        <!-- Tasks will be loaded here -->
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Modals -->
+        <!-- Project Modal -->
+        <div id="project-modal" class="modal hidden">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2 id="project-modal-title">Новый проект</h2>
+                <form id="project-form">
+                    <input type="hidden" id="project-id">
+                    <div class="form-group">
+                        <label for="project-name">Название</label>
+                        <input type="text" id="project-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="project-desc">Описание</label>
+                        <textarea id="project-desc" rows="3"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                        <button type="button" class="btn btn-secondary cancel-modal">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Task Modal -->
+        <div id="task-modal" class="modal hidden">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2 id="task-modal-title">Новая задача</h2>
+                <form id="task-form">
+                    <input type="hidden" id="task-id">
+                    <div class="form-group">
+                        <label for="task-title">Название</label>
+                        <input type="text" id="task-title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-desc">Описание</label>
+                        <textarea id="task-desc" rows="3"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="task-project">Проект</label>
+                            <select id="task-project" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="task-status">Статус</label>
+                            <select id="task-status">
+                                <option value="todo">К выполнению</option>
+                                <option value="in_progress">В работе</option>
+                                <option value="done">Выполнено</option>
+                                <option value="cancelled">Отменено</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="task-priority">Приоритет</label>
+                            <select id="task-priority">
+                                <option value="low">Низкий</option>
+                                <option value="medium" selected>Средний</option>
+                                <option value="high">Высокий</option>
+                                <option value="urgent">Срочный</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                        <button type="button" class="btn btn-secondary cancel-modal">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Comments Modal -->
+        <div id="comments-modal" class="modal hidden">
+            <div class="modal-content large">
+                <span class="close">&times;</span>
+                <h2>Комментарии к задаче</h2>
+                <div id="comments-list" class="comments-list">
+                    <!-- Comments will be loaded here -->
+                </div>
+                <form id="comment-form" class="comment-form">
+                    <input type="hidden" id="comment-task-id">
+                    <div class="form-group">
+                        <textarea id="comment-text" placeholder="Напишите комментарий..." rows="2" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Отправить</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,13 +1,24 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
+from flask_cors import CORS
 from app.models import db
 from app.config import config
 from app.utils.logger import setup_logging
+import os
 
 def create_app(config_name='default'):
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder='static', static_url_path='')
     app.config.from_object(config[config_name])
+    
+    # Initialize CORS
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": ["http://localhost:5001", "http://127.0.0.1:5001"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Authorization", "Content-Type"]
+        }
+    })
     
     # Initialize extensions
     db.init_app(app)
@@ -51,6 +62,11 @@ def create_app(config_name='default'):
     @app.route('/api/health', methods=['GET'])
     def health_check():
         return jsonify({'status': 'healthy', 'service': 'Task Manager API'}), 200
+    
+    # Serve frontend
+    @app.route('/', methods=['GET'])
+    def serve_frontend():
+        return send_from_directory('static', 'index.html')
     
     # Register blueprints
     from app.routes.auth import auth_bp
